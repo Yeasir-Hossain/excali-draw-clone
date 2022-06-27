@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState } from "react";
 import rough from 'roughjs/bundled/rough.esm';
+import Tools from "./Tools";
 
 const generator = rough.generator()
 
@@ -52,22 +53,10 @@ function App() {
 
   return (
     <div>
-      <div className="fixed">
-        <input
-          type="radio"
-          id="line"
-          checked={elementType === "line"}
-          onChange={() => setElementType("line")}
-        />
-        <label htmlFor="line">Line</label>
-        <input
-          type="radio"
-          id="rectangle"
-          checked={elementType === "rectangle"}
-          onChange={() => setElementType("rectangle")}
-        />
-        <label htmlFor="rectangle">Rectangle</label>
-      </div>
+      <Tools
+        elementType={elementType}
+        setElementType={setElementType}
+      ></Tools>
       <canvas
         id="canvas"
         width={canvasWidth}
@@ -79,7 +68,7 @@ function App() {
         onTouchMove={handleMouseMove}
         onTouchEnd={handleMouseUp} >
       </canvas>
-    </div>
+    </div >
   );
 }
 
