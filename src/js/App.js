@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import rough from 'roughjs/bundled/rough.esm';
 import cursorForPosition from "./cursorForPosition";
 import getElementAtPosition from "./getElementAtPostion";
+import useHistory from "./hook/useHistory";
 import Tools from "./Tools";
 
 const generator = rough.generator()
@@ -61,11 +62,10 @@ const adjustmentRequired = type => ["line", "rectangle"].includes(type);
 function App() {
   const canvasWidth = window.innerWidth;
   const canvasHeight = window.innerHeight;
-  const [elements, setElements] = useState([])
+  const [elements, setElements, handleUndo, handleRedo] = useHistory([])
   const [action, setAction] = useState("none")
   const [tool, setTool] = useState("selection")
   const [selected, setSelected] = useState(null)
-
 
   useEffect(() => {
     const canvas = document.getElementById('canvas');
@@ -81,7 +81,7 @@ function App() {
     const updatedElement = createElement(id, x1, y1, x2, y2, type)
     const elementscpy = [...elements]
     elementscpy[id] = updatedElement;
-    setElements(elementscpy)
+    setElements(elementscpy, true)
   }
 
   const handleMouseDown = (e) => {
@@ -94,6 +94,9 @@ function App() {
         const offsetX = clientX - element.x1
         const offsetY = clientY - element.y1
         setSelected({ ...element, offsetX, offsetY })
+
+        setElements((prevState=>prevState))
+
         if (element.position === "inside") {
           setAction("moving")
         }
@@ -137,17 +140,17 @@ function App() {
     }
   }
   const handleMouseUp = () => {
-    const index = selected?.id;
-    const { id, type } = elements[index];
-    if ((action === "drawing" || action === "resizing") && adjustmentRequired(type)) {
-      const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
-      updatedElement(id, x1, y1, x2, y2, type);
+    if (selected) {
+      const index = selected.id;
+      const { id, type } = elements[index];
+      if ((action === "drawing" || action === "resizing") && adjustmentRequired(type)) {
+        const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
+        updatedElement(id, x1, y1, x2, y2, type);
+      }
     }
     setAction("none")
     setSelected(null)
   }
-
-
 
   return (
     <div>
@@ -166,6 +169,10 @@ function App() {
         onTouchMove={handleMouseMove}
         onTouchEnd={handleMouseUp} >
       </canvas>
+      <div className='fixed bottom-0 p-4'>
+        <button className="bg-slate-300 rounded-lg text-xl" onClick={handleUndo}>Undo</button>
+        <button className="bg-slate-300 rounded-lg text-xl" onClick={handleRedo}>Redo</button>
+      </div>
     </div >
   );
 }
