@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import rough from 'roughjs/bundled/rough.esm';
+import cursorForPosition from "./cursorForPosition";
 import getElementAtPosition from "./getElementAtPostion";
 import Tools from "./Tools";
 
@@ -20,6 +21,24 @@ const createElement = (id, x1, y1, x2, y2, type) => {
   }
   return { id, x1, y1, x2, y2, type, roughElement }
 }
+//resize
+const resizedCoordinates = (clientX, clientY, position, coordinates) => {
+  const { x1, y1, x2, y2 } = coordinates;
+  switch (position) {
+    case "tl":
+    case "start":
+      return { x1: clientX, y1: clientY, x2, y2 };
+    case "tr":
+      return { x1, y1: clientY, x2: clientX, y2 };
+    case "bl":
+      return { x1: clientX, y1, x2, y2: clientY };
+    case "br":
+    case "end":
+      return { x1, y1, x2: clientX, y2: clientY };
+    default:
+      return null; //will not execute normally
+  }
+};
 //adjust element
 const adjustElementCoordinates = element => {
   const { type, x1, y1, x2, y2 } = element;
@@ -75,7 +94,11 @@ function App() {
         const offsetX = clientX - element.x1
         const offsetY = clientY - element.y1
         setSelected({ ...element, offsetX, offsetY })
-        setAction("moving")
+        if (element.position === "inside") {
+          setAction("moving")
+        }
+        else
+          setAction("resizing")
       }
     }
     else {
@@ -84,17 +107,19 @@ function App() {
       const element = createElement(id, clientX, clientY, clientX, clientY, tool)
       setElements(prevState => [...prevState, element])
       setAction("drawing")
+      setSelected(element)
     }
   }
   const handleMouseMove = (e) => {
     const { clientX, clientY } = e
 
     if (tool === "selection") {
-      e.target.style.cursor = getElementAtPosition(clientX, clientY, elements) ? "move" : "default"
+      const element = getElementAtPosition(clientX, clientY, elements)
+      e.target.style.cursor = element ? cursorForPosition(element.position) : "default"
     }
     // for drawing
     if (action === "drawing") {
-      const index = elements.length - 1;
+      const index = selected.id;
       const { x1, y1 } = elements[index]
       updatedElement(index, x1, y1, clientX, clientY, tool)
     }
@@ -105,11 +130,14 @@ function App() {
       const newX1 = clientX - offsetX
       const newY1 = clientY - offsetY
       updatedElement(id, newX1, newY1, newX1 + width, newY1 + height, type)
-
+    } else if (action === "resizing") {
+      const { id, type, position, ...coordinates } = selected;
+      const { x1, y1, x2, y2 } = resizedCoordinates(clientX, clientY, position, coordinates);
+      updatedElement(id, x1, y1, x2, y2, type);
     }
   }
   const handleMouseUp = () => {
-    const index = selected.id;
+    const index = selected?.id;
     const { id, type } = elements[index];
     if ((action === "drawing" || action === "resizing") && adjustmentRequired(type)) {
       const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
