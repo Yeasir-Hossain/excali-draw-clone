@@ -4,6 +4,7 @@ import cursorForPosition from "./cursorForPosition";
 import getElementAtPosition from "./getElementAtPostion";
 import useHistory from "./hook/useHistory";
 import Tools from "./Tools";
+import getStroke from "perfect-freehand";
 
 const generator = rough.generator()
 
@@ -13,11 +14,14 @@ const createElement = (id, x1, y1, x2, y2, type) => {
   switch (type) {
     case "line":
       roughElement = generator.line(x1, y1, x2, y2)
-      break;
+      return { id, x1, y1, x2, y2, type, roughElement }
     case "rectangle":
       roughElement = generator.rectangle(x1, y1, x2 - x1, y2 - y1)
-      break;
+      return { id, x1, y1, x2, y2, type, roughElement }
+    case "pencil":
+      return { id, type, points: [{ x: x1, y: y1 }] }
     default:
+      console.error(`Type not recognised: ${type}`)
 
   }
   return { id, x1, y1, x2, y2, type, roughElement }
@@ -59,6 +63,47 @@ const adjustElementCoordinates = element => {
 };
 const adjustmentRequired = type => ["line", "rectangle"].includes(type);
 
+const getSvgPathFromStroke = stroke => {
+  if (!stroke.length) return "";
+
+  const d = stroke.reduce(
+    (acc, [x0, y0], i, arr) => {
+      const [x1, y1] = arr[(i + 1) % arr.length];
+      acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+      return acc;
+    },
+    ["M", ...stroke[0], "Q"]
+  );
+
+  d.push("Z");
+  return d.join(" ");
+};
+
+
+
+const drawElement = (roughCanvas, context, element) => {
+  switch (element.type) {
+    case "line":
+    case "rectangle":
+      roughCanvas.draw(element.roughElement);
+      break;
+    case "pencil":
+      const stroke = getSvgPathFromStroke(getStroke(element.points, {
+        thinning: 0.8
+      }));
+      context.fill(new Path2D(stroke));
+      break;
+    case "text":
+      context.textBaseline = "top";
+      context.font = "24px sans-serif";
+      context.fillText(element.text, element.x1, element.y1);
+      break;
+    default:
+      console.error(`Type not recognised: ${element.type}`);
+  }
+};
+
+
 function App() {
   const canvasWidth = window.innerWidth;
   const canvasHeight = window.innerHeight;
@@ -73,14 +118,37 @@ function App() {
     context.clearRect(0, 0, canvas.width, canvas.height)
 
     const roughCanvas = rough.canvas(canvas)
-    elements.forEach(element => roughCanvas.draw(element.roughElement))
+    elements.forEach(element => drawElement(roughCanvas, context, element))
 
   }, [elements]);
 
   const updatedElement = (id, x1, y1, x2, y2, type) => {
-    const updatedElement = createElement(id, x1, y1, x2, y2, type)
-    const elementscpy = [...elements]
-    elementscpy[id] = updatedElement;
+    const elementscpy = [...elements];
+
+    switch (type) {
+      case "line":
+        elementscpy[id] = createElement(id, x1, y1, x2, y2, type);
+        break;
+      case "rectangle":
+        elementscpy[id] = createElement(id, x1, y1, x2, y2, type);
+        break;
+      case "pencil":
+        elementscpy[id].points = [...elementscpy[id].points, { x: x2, y: y2 }];
+        break;
+      // case "text":
+      //   const textWidth = document
+      //     .getElementById("canvas")
+      //     .getContext("2d")
+      //     .measureText(options.text).width;
+      //   const textHeight = 24;
+      //   elementsCopy[id] = {
+      //     ...createElement(id, x1, y1, x1 + textWidth, y1 + textHeight, type),
+      //     text: options.text,
+      //   };
+      //   break;
+      default:
+        console.error(`Type not recognised: ${type}`)
+    }
     setElements(elementscpy, true)
   }
 
@@ -88,20 +156,27 @@ function App() {
     const { clientX, clientY } = e
     //for selection
     if (tool === "selection") {
-      //selection of item
-      const element = getElementAtPosition(clientX, clientY, elements)
-      if (element) {
-        const offsetX = clientX - element.x1
-        const offsetY = clientY - element.y1
-        setSelected({ ...element, offsetX, offsetY })
+      const { clientX, clientY } = e;
+      if (tool === "selection") {
+        const element = getElementAtPosition(clientX, clientY, elements);
+        if (element) {
+          if (element.type === "pencil") {
+            const xOffsets = element.points.map(point => clientX - point.x);
+            const yOffsets = element.points.map(point => clientY - point.y);
+            setSelected({ ...element, xOffsets, yOffsets });
+          } else {
+            const offsetX = clientX - element.x1;
+            const offsetY = clientY - element.y1;
+            setSelected({ ...element, offsetX, offsetY });
+          }
+          setElements(prevState => prevState);
 
-        setElements((prevState=>prevState))
-
-        if (element.position === "inside") {
-          setAction("moving")
+          if (element.position === "inside") {
+            setAction("moving");
+          } else {
+            setAction("resizing");
+          }
         }
-        else
-          setAction("resizing")
       }
     }
     else {
@@ -127,12 +202,26 @@ function App() {
       updatedElement(index, x1, y1, clientX, clientY, tool)
     }
     else if (action === "moving") {
-      const { id, x1, x2, y1, y2, type, offsetX, offsetY } = selected;
-      const width = x2 - x1;
-      const height = y2 - y1;
-      const newX1 = clientX - offsetX
-      const newY1 = clientY - offsetY
-      updatedElement(id, newX1, newY1, newX1 + width, newY1 + height, type)
+      if (selected.type === "pencil") {
+        const newPoints = selected.points.map((_, index) => ({
+          x: clientX - selected.xOffsets[index],
+          y: clientY - selected.yOffsets[index],
+        }));
+        const elementsCopy = [...elements];
+        elementsCopy[selected.id] = {
+          ...elementsCopy[selected.id],
+          points: newPoints,
+        };
+        setElements(elementsCopy, true);
+      } else {
+        const { id, x1, x2, y1, y2, type, offsetX, offsetY } = selected;
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const newX1 = clientX - offsetX;
+        const newY1 = clientY - offsetY;
+        const options = type === "text" ? { text: selected.text } : {};
+        updatedElement(id, newX1, newY1, newX1 + width, newY1 + height, type, options);
+      }
     } else if (action === "resizing") {
       const { id, type, position, ...coordinates } = selected;
       const { x1, y1, x2, y2 } = resizedCoordinates(clientX, clientY, position, coordinates);
@@ -169,9 +258,9 @@ function App() {
         onTouchMove={handleMouseMove}
         onTouchEnd={handleMouseUp} >
       </canvas>
-      <div className='fixed bottom-0 p-4'>
-        <button className="bg-slate-300 rounded-lg text-xl" onClick={handleUndo}>Undo</button>
-        <button className="bg-slate-300 rounded-lg text-xl" onClick={handleRedo}>Redo</button>
+      <div className='fixed bottom-0 p-4 inline-flex'>
+        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" onClick={handleUndo}>Undo</button>
+        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" onClick={handleRedo}>Redo</button>
       </div>
     </div >
   );

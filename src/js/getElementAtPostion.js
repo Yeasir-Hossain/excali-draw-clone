@@ -13,7 +13,7 @@ const nearPoint = (x, y, x1, y1, name) => {
 };
 
 const positionWithinElements = (x, y, element) => {
-    const { type, x1, y1, x2, y2 } = element;
+    const { type, x1, x2, y1, y2 } = element;
     switch (type) {
         case "line":
             const on = onLine(x1, y1, x2, y2, x, y);
@@ -27,7 +27,17 @@ const positionWithinElements = (x, y, element) => {
             const bottomRight = nearPoint(x, y, x2, y2, "br");
             const inside = x >= x1 && x <= x2 && y >= y1 && y <= y2 ? "inside" : null;
             return topLeft || topRight || bottomLeft || bottomRight || inside;
+        case "pencil":
+            const betweenAnyPoint = element.points.some((point, index) => {
+                const nextPoint = element.points[index + 1];
+                if (!nextPoint) return false;
+                return onLine(point.x, point.y, nextPoint.x, nextPoint.y, x, y, 5) != null;
+            });
+            return betweenAnyPoint ? "inside" : null;
+        case "text":
+            return x >= x1 && x <= x2 && y >= y1 && y <= y2 ? "inside" : null;
         default:
+            console.error(`Type not recognised: ${type}`)
     }
 }
 const getElementAtPosition = (x, y, elements) => {
