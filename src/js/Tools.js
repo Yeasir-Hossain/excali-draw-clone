@@ -31,6 +31,12 @@ const Tools = ({ tool, setTool }) => {
                 onChange={() => setTool("pencil")}
             />
             <label htmlFor="pencil">Pencil</label>
+            <input
+                type="radio"
+                id="text"
+                checked={tool === "text"}
+                onChange={() => setTool("text")} />
+            <label htmlFor="text">Text</label>
         </div>
     );
 };
