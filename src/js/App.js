@@ -6,6 +6,7 @@ import useHistory from "./hook/useHistory";
 import Tools from "./Tools";
 import getStroke from "perfect-freehand";
 import '../css/app.css'
+import { FaUndo, FaRedo } from 'react-icons/fa';
 
 const generator = rough.generator()
 
@@ -132,7 +133,7 @@ function App() {
       textArea.focus();
       textArea.value = selected.text;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updatedElement = (id, x1, y1, x2, y2, type, options) => {
@@ -310,8 +311,8 @@ function App() {
         onTouchEnd={handleMouseUp} >
       </canvas>
       <div className='fixed bottom-0 p-4 inline-flex gap-2'>
-        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg" onClick={handleUndo}>Undo</button>
-        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg" onClick={handleRedo}>Redo</button>
+        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg" onClick={handleUndo}><FaUndo /></button>
+        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg" onClick={handleRedo}><FaRedo /></button>
       </div>
     </div >
   );

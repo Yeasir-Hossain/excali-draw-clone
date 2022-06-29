@@ -1,0 +1,14 @@
+input[type="radio"]{
+    -webkit-appearance: none;
+}
+input[type="radio"]:checked+label{
+   background-color: #9333ea;
+   color: white;
+}
+
+.icon{
+  margin-top: 25%; 
+}
+.icon2{
+    margin-top: 5px;
+}
