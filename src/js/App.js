@@ -7,6 +7,7 @@ import Tools from "./Tools";
 import getStroke from "perfect-freehand";
 import '../css/app.css'
 import { FaUndo, FaRedo } from 'react-icons/fa';
+import zoom from "./Zoom";
 
 const generator = rough.generator()
 
@@ -19,6 +20,9 @@ const createElement = (id, x1, y1, x2, y2, type) => {
       return { id, x1, y1, x2, y2, type, roughElement }
     case "rectangle":
       roughElement = generator.rectangle(x1, y1, x2 - x1, y2 - y1)
+      return { id, x1, y1, x2, y2, type, roughElement }
+    case "circle":
+      roughElement = generator.arc(x1, y1, x2 - x1, 0, 2 * Math.PI)
       return { id, x1, y1, x2, y2, type, roughElement }
     case "pencil":
       return { id, type, points: [{ x: x1, y: y1 }] }
@@ -88,6 +92,7 @@ const getSvgPathFromStroke = stroke => {
 const drawElement = (roughCanvas, context, element) => {
   switch (element.type) {
     case "line":
+    case "circle":
     case "rectangle":
       roughCanvas.draw(element.roughElement);
       break;
@@ -146,6 +151,9 @@ function App() {
       case "rectangle":
         elementscpy[id] = createElement(id, x1, y1, x2, y2, type);
         break;
+      case "circle":
+        elementscpy[id] = createElement(id, x1, y1, x2, y2, type);
+        break;
       case "pencil":
         elementscpy[id].points = [...elementscpy[id].points, { x: x2, y: y2 }];
         break;
@@ -166,7 +174,7 @@ function App() {
     setElements(elementscpy, true)
   }
 
-  const handleMouseDown = (e) => {
+  const handleMouseDown = e => {
     if (action === "writing") return;
 
     const { clientX, clientY } = e;
@@ -197,7 +205,7 @@ function App() {
       setAction(tool === "text" ? "writing" : "drawing");
     }
   }
-  const handleMouseMove = (e) => {
+  const handleMouseMove = e => {
     const { clientX, clientY } = e
     //for selection
     if (tool === "selection") {
@@ -273,7 +281,108 @@ function App() {
     setSelected(null);
     updatedElement(id, x1, y1, null, null, type, { text: e.target.value });
   };
+  const handleTouchStart = e => {
+    if (action === "writing") return;
 
+    const { clientX, clientY } = e.touches[0];
+    if (tool === "selection") {
+      const element = getElementAtPosition(clientX, clientY, elements);
+      if (element) {
+        if (element.type === "pencil") {
+          const xOffsets = element.points.map(point => clientX - point.x);
+          const yOffsets = element.points.map(point => clientY - point.y);
+          setSelected({ ...element, xOffsets, yOffsets });
+        } else {
+          const offsetX = clientX - element.x1;
+          const offsetY = clientY - element.y1;
+          setSelected({ ...element, offsetX, offsetY });
+        }
+        setElements(prevState => prevState);
+        if (element.position === "inside") {
+          setAction("moving");
+        } else {
+          setAction("resizing");
+        }
+      }
+    } else {
+      const id = elements.length;
+      const element = createElement(id, clientX, clientY, clientX, clientY, tool);
+      setElements(prevState => [...prevState, element]);
+      setSelected(element);
+      setAction(tool === "text" ? "writing" : "drawing");
+    }
+  }
+  const handleTouchMove = e => {
+    const { clientX, clientY } = e.touches[0]
+    //for selection
+    if (tool === "selection") {
+      const element = getElementAtPosition(clientX, clientY, elements)
+      e.target.style.cursor = element ? cursorForPosition(element.position) : "default"
+    }
+    // for drawing
+    if (action === "drawing") {
+      const index = selected.id;
+      const { x1, y1 } = elements[index]
+      updatedElement(index, x1, y1, clientX, clientY, tool)
+    }
+    //moving
+    else if (action === "moving") {
+      if (selected.type === "pencil") {
+        const newPoints = selected.points.map((_, index) => ({
+          x: clientX - selected.xOffsets[index],
+          y: clientY - selected.yOffsets[index],
+        }));
+        const elementsCopy = [...elements];
+        elementsCopy[selected.id] = {
+          ...elementsCopy[selected.id],
+          points: newPoints,
+        };
+        setElements(elementsCopy, true);
+      } else {
+        //square and line
+        const { id, x1, x2, y1, y2, type, offsetX, offsetY } = selected;
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const newX1 = clientX - offsetX;
+        const newY1 = clientY - offsetY;
+        const options = type === "text" ? { text: selected.text } : {};
+        updatedElement(id, newX1, newY1, newX1 + width, newY1 + height, type, options);
+      }
+    }
+    //resizing
+    else if (action === "resizing") {
+      const { id, type, position, ...coordinates } = selected;
+      const { x1, y1, x2, y2 } = resizedCoordinates(clientX, clientY, position, coordinates);
+      updatedElement(id, x1, y1, x2, y2, type);
+    }
+  }
+  const handleTouchEnd = e =>{
+    console.log(e);
+    const { clientX, clientY } = e.touches[0];
+
+    if (selected) {
+      if (
+        selected.type === "text" &&
+        clientX - selected.offsetX === selected.x1 &&
+        clientY - selected.offsetY === selected.y1
+      ) {
+        setAction("writing");
+        return;
+      }
+
+      const index = selected.id;
+      const { id, type } = elements[index];
+      if ((action === "drawing" || action === "resizing") && adjustmentRequired(type)) {
+        const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
+        updatedElement(id, x1, y1, x2, y2, type);
+      }
+    }
+
+    if (action === "writing") return;
+
+    setAction("none");
+    setSelected(null);
+  };
   return (
     <div>
       <Tools
@@ -306,11 +415,13 @@ function App() {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onTouchStart={handleMouseDown}
-        onTouchMove={handleMouseMove}
-        onTouchEnd={handleMouseUp} >
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd} >
       </canvas>
       <div className='fixed bottom-0 p-4 inline-flex gap-2'>
+        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded" onClick={zoom} id="minus">+</button>
+        <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded" onClick={zoom} id="plus">-</button>
         <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg" onClick={handleUndo}><FaUndo /></button>
         <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg" onClick={handleRedo}><FaRedo /></button>
       </div>
