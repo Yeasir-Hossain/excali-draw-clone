@@ -5,7 +5,7 @@ import getElementAtPosition from "./getElementAtPostion";
 import useHistory from "./hook/useHistory";
 import Tools from "./Tools";
 import getStroke from "perfect-freehand";
-import '../css/app.css'
+import '../css/index.css'
 import { FaUndo, FaRedo } from 'react-icons/fa';
 import zoom from "./Zoom";
 
@@ -92,7 +92,6 @@ const getSvgPathFromStroke = stroke => {
 const drawElement = (roughCanvas, context, element) => {
   switch (element.type) {
     case "line":
-    case "circle":
     case "rectangle":
       roughCanvas.draw(element.roughElement);
       break;
@@ -424,6 +423,9 @@ function App() {
         <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded" onClick={zoom} id="plus">-</button>
         <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg" onClick={handleUndo}><FaUndo /></button>
         <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg" onClick={handleRedo}><FaRedo /></button>
+        <button onClick={()=>{
+          console.log(elements);
+        }}>Save</button>
       </div>
     </div >
   );
